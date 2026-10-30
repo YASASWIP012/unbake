@@ -63,7 +63,7 @@ All open weights: LTX-2.5 22B distilled with the Cameraman v2 IC-LoRA, FLUX 3 Im
 - `uv run pytest` covers 20 tests with no GPU or network: known camera moves are recovered, a recipe rebuilt on another picture still matches, a wrong move scores low, and the fix loop stops when a render lands.
 - On the four example recipes, the camera preview scored 79 (crash zoom), 67 (road tracking), 94 (city time-lapse) and 50 (cloud drift, which Unbake flags as unreliable).
 - The analyzer has been run on the four real clips below. The camera confidence cutoff of 0.7 was chosen on those four, so treat it as a starting value.
-- **Real guided renders.** All of these are in `examples/renders`, at 960x544, and none has been graded. The first four have 97 frames, the last three 65. Scores were taken on the full clips, before any trimming.
+- **Real guided renders.** All of these are in `examples/renders`, at 960x544, and none has been graded. The first four have 97 frames, the last four 65. Scores were taken on the full clips, before any trimming.
 
   | Render | Recipe | Photo | Camera travel landed | Overall |
   |---|---|---|---|---|
@@ -74,6 +74,7 @@ All open weights: LTX-2.5 22B distilled with the Cameraman v2 IC-LoRA, FLUX 3 Im
   | `forest_sweeppan.mp4` | Sweeping pan | Misty forest | x 100% | 99 |
   | `lake_clip_to_render.mp4` | Measured in the graph | Mountain lake | zoom 112%, x 75%, roll 71% | 72 |
   | `wave_slowpush.mp4` | Slow push-in | Ocean wave | zoom 105%, x 12%, roll 59% | 51 |
+  | `street_crashzoom.mp4` | Crash zoom at 40% | Amsterdam street | x 99%, y 83%, zoom 99% | 94 |
 
   Renders of still scenes stay close to the guide, so a large move can look like a repainted zoom, and the road render goes soft at the end. Scenes the prompt sets in motion do better: the surf in the wave clip is generated. The final frames of two clips broke down, so `lake_clip_to_render.mp4` stops at frame 54 and `wave_slowpush.mp4` at frame 57. Water in the bridge render changes over time, which a warped still wouldn't do. `bridge_sweeppan.mp4` was built and scored inside one graph by the Unbake nodes, using `examples/workflows/unbake_nodes_api.json`. The scores come from Unbake's own measurement, which is weak on low-contrast pictures like the lighthouse sky.
 - **Prompt alone, for comparison.** `examples/renders/road_ltx25.mp4` came from the [Lightricks/LTX-2.5](https://huggingface.co/spaces/Lightricks/LTX-2.5) public demo with a compiled prompt and no guide video. It landed 17% of the zoom and scored 21 for camera and 19 overall.
@@ -92,7 +93,7 @@ The recipes in `examples/recipes` were measured from these Wikimedia Commons cli
 - Sweeping pan: [Rendszerváltó Nagykoncert panning shot](https://commons.wikimedia.org/wiki/File:Rendszerv%C3%A1lt%C3%B3_Nagykoncert_panning_shot.webm), CC BY 4.0. The original travels five frame widths, so the recipe keeps 5% of the measured move.
 - Slow push-in: [Sequence 4 NW Road pan right to fence](https://commons.wikimedia.org/wiki/File:Sequence_4_NW_Road_pan_right_to_fence_(49717705892).webm), public domain
 
-Photos: [Misty coniferous forest on a slope](https://commons.wikimedia.org/wiki/File:Misty_coniferous_forest_on_a_slope_(Unsplash).jpg), [Big ocean wave splash](https://commons.wikimedia.org/wiki/File:Big_ocean_wave_splash_(Unsplash).jpg), [Mountain lake dam](https://commons.wikimedia.org/wiki/File:Mountain_lake_dam.jpg), [Cihou Lighthouse in Evening](https://commons.wikimedia.org/wiki/File:Cihou_Lighthouse_in_Evening_20140508.jpg) and [Széchenyi Chain Bridge in Budapest at night](https://commons.wikimedia.org/wiki/File:Sz%C3%A9chenyi_Chain_Bridge_in_Budapest_at_night.jpg), all CC0.
+Photos: [Koningsstraat and Nieuwmarkt at night, Amsterdam](https://commons.wikimedia.org/wiki/File:2024_-_Photo_of_the_street_Koningsstraat_and_square_Nieuwmarkt_with_Christmas_lights_by_night_in_Amsterdam_city_in_winter_-_free_image_of_street_photography_in_The_Netherlands_by_Fons_Heijnsbroek.jpg) by Fons Heijnsbroek, [Misty coniferous forest on a slope](https://commons.wikimedia.org/wiki/File:Misty_coniferous_forest_on_a_slope_(Unsplash).jpg), [Big ocean wave splash](https://commons.wikimedia.org/wiki/File:Big_ocean_wave_splash_(Unsplash).jpg), [Mountain lake dam](https://commons.wikimedia.org/wiki/File:Mountain_lake_dam.jpg), [Cihou Lighthouse in Evening](https://commons.wikimedia.org/wiki/File:Cihou_Lighthouse_in_Evening_20140508.jpg) and [Széchenyi Chain Bridge in Budapest at night](https://commons.wikimedia.org/wiki/File:Sz%C3%A9chenyi_Chain_Bridge_in_Budapest_at_night.jpg), all CC0.
 
 `examples/renders/lighthouse_splice.mp4` is the lighthouse render graded with the city time-lapse's look. `web/example.jpg` is a frame from the Manaus Time-Lapse clip above. `examples/photos/road.png` is a frame of the Moelltal tracking shot, and `examples/renders/road_ltx25.mp4` and `road_roadtrack.mp4` start from it, so all three carry that clip's CC BY-SA 3.0 license.
 
