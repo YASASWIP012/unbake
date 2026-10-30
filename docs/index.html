@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unbake</title>
+  <style>
+    :root { color-scheme: dark; --bg: #111214; --panel: #1a1c1f; --line: #2c2f34; --text: #ececec; --muted: #9a9ea6; --accent: #f2c14e; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { font-size: 34px; margin: 0 0 8px; }
+    h2 { font-size: 22px; margin: 48px 0 8px; }
+    p { color: var(--muted); margin: 0 0 16px; max-width: 70ch; }
+    a { color: var(--accent); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+    button, .upload { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 99px; padding: 6px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+    button.on { border-color: var(--accent); color: var(--accent); }
+    .stage { display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 16px; }
+    canvas { width: 100%; display: block; border-radius: 8px; background: #000; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; font-size: 14px; }
+    .panel label { display: block; color: var(--muted); margin-top: 12px; }
+    input[type=range] { width: 100%; accent-color: var(--accent); }
+    svg { width: 100%; height: 90px; display: block; margin-top: 8px; }
+    .legend span { margin-right: 10px; font-size: 12px; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    video { width: 100%; display: block; background: #000; }
+    figcaption { padding: 10px 12px; font-size: 14px; color: var(--muted); }
+    figcaption strong { color: var(--text); font-weight: 600; display: block; }
+    @media (max-width: 720px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Unbake</h1>
+  <p>Drop in a video clip and Unbake measures what the camera did, then deletes the clip. What's left is a small recipe you can read, edit and run on your own photo. This page runs the camera preview in your browser, with no AI model and nothing uploaded.</p>
+  <p><a href="https://github.com/YASASWIP012/unbake">Code and setup on GitHub</a></p>
+
+  <h2>Take the camera move from your own clip</h2>
+  <p>This runs in your browser and your clip isn't uploaded. It's a quick estimate from the first 8 seconds. The full analyzer in the repo does more.</p>
+  <label class="upload" id="clipDrop" style="display:inline-block;margin-bottom:8px">Choose a video clip
+    <input id="clipInput" type="file" accept="video/*" hidden>
+  </label>
+  <span id="clipStatus" style="color:var(--muted);font-size:14px;margin-left:8px"></span>
+
+  <h2>Try a recipe</h2>
+  <div class="chips" id="recipes"></div>
+  <div class="chips" id="photos"></div>
+  <div class="stage">
+    <canvas id="view" width="960" height="544"></canvas>
+    <div class="panel">
+      <strong id="name"></strong>
+      <div id="move" style="color: var(--muted)"></div>
+      <label>Size of move <span id="gainText"></span>
+        <input id="gain" type="range" min="0" max="1.5" step="0.05" value="1">
+      </label>
+      <label>Speed
+        <input id="speed" type="range" min="2" max="8" step="0.5" value="4">
+      </label>
+      <svg id="curves" viewBox="0 0 100 40" preserveAspectRatio="none"></svg>
+      <div class="legend">
+        <span style="color:#f2c14e">pan</span><span style="color:#6fcf97">tilt</span><span style="color:#7fb3ff">zoom</span><span style="color:#eb6f6f">roll</span>
+      </div>
+      <p style="margin-top:12px">Recipe size: <span id="size"></span></p>
+      <button id="save" type="button">Download this recipe</button>
+    </div>
+  </div>
+
+  <h2>Real renders</h2>
+  <p>LTX-2.5 with the Cameraman IC-LoRA, run through ComfyUI on a free Kaggle GPU. Each clip starts from one photo. Scores are Unbake's own measurement of how much of the recipe's camera move landed.</p>
+  <div class="gallery" id="gallery"></div>
+</main>
+<script>
+const RECIPES = [["sweeppan", "Sweeping pan"], ["crashzoom", "Crash zoom"], ["roadtrack", "Road tracking"], ["slowpush", "Slow push-in"]];
+const PHOTOS = [["chainbridge.jpg", "Budapest"], ["wave.jpg", "Ocean wave"], ["forest.jpg", "Misty forest"], ["lake.jpg", "Mountain lake"], ["lighthouse.jpg", "Lighthouse"]];
+const GALLERY = [
+  ["wave_slowpush.mp4", "Slow push-in on an ocean wave", "One photo. The surf is generated, not warped. Zoom 105%, overall 51."],
+  ["bridge_sweeppan.mp4", "Sweeping pan on Budapest", "x 100% of the travel. Overall 99. Built with the Unbake nodes."],
+  ["forest_sweeppan.mp4", "Sweeping pan on a misty forest", "x 100% of the travel. Overall 99."],
+  ["lake_clip_to_render.mp4", "Clip to render in one ComfyUI queue", "Unbake Clip measured a source video, and the same graph rendered this. Zoom 112%, overall 72. Last frames trimmed."],
+  ["lighthouse_roadtrack.mp4", "Road tracking on a lighthouse", "Zoom 102%, roll 98%, x 160%, y 50%. Overall 59."],
+  ["road_roadtrack.mp4", "Road tracking on a road", "Zoom 100%, roll 104%, x 154%, y 50%. Overall 61. The end goes soft."],
+  ["road_ltx25.mp4", "Same recipe, prompt only", "No guide video. 17% of the zoom. Overall 19."],
+];
+
+const canvas = document.getElementById("view");
+const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
+const gainInput = document.getElementById("gain");
+const speedInput = document.getElementById("speed");
+const page = document.createElement("canvas");
+page.width = W; page.height = H;
+let recipe = null;
+let recipeText = "";
+
+function chips(id, items, pick) {
+  const box = document.getElementById(id);
+  items.forEach(([value, label], i) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.onclick = () => {
+      box.querySelectorAll("button").forEach((b) => b.classList.remove("on"));
+      button.classList.add("on");
+      pick(value);
+    };
+    box.append(button);
+    if (i === 0) button.click();
+  });
+  return box;
+}
+
+function coverPhoto(image) {
+  const scale = Math.max(W / image.width, H / image.height);
+  const w = image.width * scale, h = image.height * scale;
+  page.getContext("2d").drawImage(image, (W - w) / 2, (H - h) / 2, w, h);
+}
+
+function loadPhoto(url) {
+  const image = new Image();
+  image.onload = () => coverPhoto(image);
+  image.src = url;
+}
+
+async function loadRecipe(name) {
+  recipeText = await (await fetch(`recipes/${name}.json`)).text();
+  recipe = JSON.parse(recipeText);
+  document.getElementById("name").textContent = recipe.name;
+  document.getElementById("move").textContent = recipe.camera.move.replaceAll("_", " ").replaceAll("+", " + ");
+  document.getElementById("size").textContent = `${(recipeText.length / 1024).toFixed(1)} KB, no source pixels`;
+  drawCurves();
+}
+
+function overscan(gain) {
+  const c = recipe.camera;
+  const aspect = W / H;
+  let base = 1;
+  c.x.forEach((_, i) => {
+    const tilt = Math.abs(Math.sin(c.roll[i] * gain)) * Math.max(aspect, 1 / aspect);
+    const needed = 1 + 2 * Math.max(Math.abs(c.x[i] * gain), Math.abs(c.y[i] * gain) * aspect) + tilt;
+    base = Math.max(base, needed / Math.exp(c.zoom[i] * gain));
+  });
+  return base;
+}
+
+function sample(curve, t) {
+  const at = t * (curve.length - 1);
+  const low = Math.floor(at), high = Math.min(low + 1, curve.length - 1);
+  return curve[low] + (curve[high] - curve[low]) * (at - low);
+}
+
+function drawCurves() {
+  const c = recipe.camera;
+  const lines = [[c.x, "#f2c14e"], [c.y, "#6fcf97"], [c.zoom, "#7fb3ff"], [c.roll, "#eb6f6f"]];
+  const peak = Math.max(0.01, ...lines.flatMap(([curve]) => curve.map(Math.abs)));
+  document.getElementById("curves").innerHTML = lines.map(([curve, color]) => {
+    const points = curve.map((v, i) => `${(i / (curve.length - 1)) * 100},${20 - (v / peak) * 18}`).join(" ");
+    return `<polyline fill="none" stroke="${color}" stroke-width="1" vector-effect="non-scaling-stroke" points="${points}"/>`;
+  }).join("");
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!recipe) return;
+  const gain = Number(gainInput.value);
+  const seconds = Number(speedInput.value);
+  const t = ((now / 1000) % (seconds + 1)) / seconds;
+  const at = Math.min(t, 1);
+  const c = recipe.camera;
+  const scale = overscan(gain) * Math.exp(sample(c.zoom, at) * gain);
+  const roll = sample(c.roll, at) * gain;
+  const a = scale * Math.cos(roll), b = scale * Math.sin(roll);
+  const cx = W / 2, cy = H / 2;
+  const ox = cx - (a * cx - b * cy) - sample(c.x, at) * gain * W;
+  const oy = cy - (b * cx + a * cy) - sample(c.y, at) * gain * W;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, W, H);
+  ctx.setTransform(a, b, -b, a, ox, oy);
+  ctx.drawImage(page, 0, 0);
+}
+
+gainInput.oninput = () => { document.getElementById("gainText").textContent = `${Math.round(gainInput.value * 100)}%`; };
+gainInput.oninput();
+document.getElementById("save").onclick = () => {
+  const copy = JSON.parse(recipeText);
+  copy.camera.gain = Number(gainInput.value);
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([JSON.stringify(copy, null, 2)], { type: "application/json" }));
+  link.download = `${copy.name.toLowerCase().replaceAll(" ", "-")}.json`;
+  link.click();
+};
+
+const MEASURE_SAMPLES = 97;
+const MEASURE_SECONDS = 8;
+const CURVE_POINTS = 64;
+const SMALL = [160, 90];
+const BLOCK = 16;
+const REACH = 10;
+
+function gray(data) {
+  const out = new Float32Array(data.length / 4);
+  for (let i = 0; i < out.length; i++) out[i] = 0.3 * data[i * 4] + 0.59 * data[i * 4 + 1] + 0.11 * data[i * 4 + 2];
+  return out;
+}
+
+// Match a grid of blocks between two small frames, then fit one shift, scale and rotation.
+function stepBetween(a, b) {
+  const [w, h] = SMALL;
+  const pairs = [];
+  for (let by = REACH; by + BLOCK + REACH <= h; by += 12) {
+    for (let bx = REACH; bx + BLOCK + REACH <= w; bx += 12) {
+      let mean = 0, spread = 0;
+      for (let y = 0; y < BLOCK; y++) for (let x = 0; x < BLOCK; x++) mean += a[(by + y) * w + bx + x];
+      mean /= BLOCK * BLOCK;
+      for (let y = 0; y < BLOCK; y++) for (let x = 0; x < BLOCK; x++) spread += Math.abs(a[(by + y) * w + bx + x] - mean);
+      if (spread / (BLOCK * BLOCK) < 4) continue;
+      let best = Infinity, dx = 0, dy = 0;
+      for (let sy = -REACH; sy <= REACH; sy++) {
+        for (let sx = -REACH; sx <= REACH; sx++) {
+          let cost = 0;
+          for (let y = 0; y < BLOCK && cost < best; y += 2) {
+            for (let x = 0; x < BLOCK; x += 2) cost += Math.abs(a[(by + y) * w + bx + x] - b[(by + y + sy) * w + bx + x + sx]);
+          }
+          if (cost < best) { best = cost; dx = sx; dy = sy; }
+        }
+      }
+      pairs.push({ x: bx + BLOCK / 2 - w / 2, y: by + BLOCK / 2 - h / 2, dx, dy });
+    }
+  }
+  return fitMove(pairs);
+}
+
+function fitMove(pairs) {
+  if (pairs.length < 4) return { x: 0, y: 0, zoom: 0, roll: 0 };
+  let fit = solve(pairs);
+  const errors = pairs.map((p) => Math.hypot(fit.a * p.x - fit.b * p.y + fit.tx - p.x - p.dx, fit.b * p.x + fit.a * p.y + fit.ty - p.y - p.dy));
+  const limit = Math.max(1, 2 * [...errors].sort((m, n) => m - n)[errors.length >> 1]);
+  const kept = pairs.filter((_, i) => errors[i] <= limit);
+  if (kept.length >= 4) fit = solve(kept);
+  return { x: -fit.tx / SMALL[0], y: -fit.ty / SMALL[0], zoom: Math.log(Math.hypot(fit.a, fit.b)), roll: Math.atan2(fit.b, fit.a) };
+}
+
+function solve(pairs) {
+  const n = pairs.length;
+  const mx = pairs.reduce((v, p) => v + p.x, 0) / n, my = pairs.reduce((v, p) => v + p.y, 0) / n;
+  const nx = pairs.reduce((v, p) => v + p.x + p.dx, 0) / n, ny = pairs.reduce((v, p) => v + p.y + p.dy, 0) / n;
+  let top = 0, side = 0, bottom = 1e-6;
+  for (const p of pairs) {
+    const x = p.x - mx, y = p.y - my, u = p.x + p.dx - nx, v = p.y + p.dy - ny;
+    top += x * u + y * v; side += x * v - y * u; bottom += x * x + y * y;
+  }
+  const a = top / bottom, b = side / bottom;
+  return { a, b, tx: nx - a * mx + b * my, ty: ny - b * mx - a * my };
+}
+
+function resample(curve) {
+  return Array.from({ length: CURVE_POINTS }, (_, i) => {
+    const at = (i / (CURVE_POINTS - 1)) * (curve.length - 1);
+    const low = Math.floor(at), high = Math.min(low + 1, curve.length - 1);
+    return curve[low] + (curve[high] - curve[low]) * (at - low);
+  });
+}
+
+function moveWords(c) {
+  const words = [];
+  const x = c.x.at(-1), y = c.y.at(-1), zoom = c.zoom.at(-1), roll = c.roll.at(-1);
+  if (Math.abs(zoom) > 0.05) words.push(zoom > 0 ? "push_in" : "pull_out");
+  if (Math.abs(x) > 0.03) words.push(x > 0 ? "pan_right" : "pan_left");
+  if (Math.abs(y) > 0.03) words.push(y > 0 ? "tilt_down" : "tilt_up");
+  if (Math.abs(roll) > 0.03) words.push(roll > 0 ? "roll_cw" : "roll_ccw");
+  return words.join("+") || "static";
+}
+
+async function measureClip(file) {
+  const status = document.getElementById("clipStatus");
+  status.textContent = "Measuring...";
+  const video = document.createElement("video");
+  video.muted = true; video.playsInline = true; video.src = URL.createObjectURL(file);
+  await new Promise((done, fail) => { video.onloadedmetadata = done; video.onerror = fail; });
+  const span = Math.min(video.duration, MEASURE_SECONDS);
+  const small = document.createElement("canvas");
+  [small.width, small.height] = SMALL;
+  const draw = small.getContext("2d", { willReadFrequently: true });
+  const curves = { x: [0], y: [0], zoom: [0], roll: [0] };
+  let last = null;
+  for (let i = 0; i < MEASURE_SAMPLES; i++) {
+    video.currentTime = (i / (MEASURE_SAMPLES - 1)) * span * 0.999;
+    await new Promise((done) => { video.onseeked = done; });
+    draw.drawImage(video, 0, 0, SMALL[0], SMALL[1]);
+    const now = gray(draw.getImageData(0, 0, SMALL[0], SMALL[1]).data);
+    if (last) {
+      const step = stepBetween(last, now);
+      for (const key of Object.keys(curves)) curves[key].push(curves[key].at(-1) + step[key]);
+    }
+    last = now;
+    if (i % 10 === 0) { status.textContent = `Measuring ${Math.round((i / MEASURE_SAMPLES) * 100)}%`; await new Promise((done) => setTimeout(done)); }
+  }
+  URL.revokeObjectURL(video.src);
+  const camera = { enabled: true, easing: "linear", jitter: 0, confidence: 1, gain: 1 };
+  for (const key of Object.keys(curves)) camera[key] = resample(curves[key]).map((v) => Number(v.toFixed(5)));
+  camera.move = moveWords(camera);
+  const made = {
+    name: file.name.replace(/\.[^.]+$/, "").slice(0, 40), camera,
+    source: { duration: span, fps: MEASURE_SAMPLES / span, width: video.videoWidth, height: video.videoHeight, shots: [[0, span]] },
+    transform: { enabled: false },
+    look: { enabled: false, lab_mean: [50, 0, 0], lab_std: [20, 5, 5], contrast: 20 },
+    pacing: { enabled: false, energy: [] },
+    sound: { enabled: false },
+  };
+  recipeText = JSON.stringify(made, null, 2);
+  recipe = made;
+  document.getElementById("recipes").querySelectorAll("button").forEach((b) => b.classList.remove("on"));
+  document.getElementById("name").textContent = made.name;
+  document.getElementById("move").textContent = camera.move.replaceAll("_", " ").replaceAll("+", " + ");
+  document.getElementById("size").textContent = `${(recipeText.length / 1024).toFixed(1)} KB, no source pixels`;
+  drawCurves();
+  status.textContent = "Done. The recipe is running below, and your clip stayed on this device.";
+  window.measuredCamera = camera;
+}
+
+document.getElementById("clipInput").onchange = (event) => { if (event.target.files[0]) measureClip(event.target.files[0]); };
+chips("recipes", RECIPES, loadRecipe);
+const photoBox = chips("photos", PHOTOS, (file) => loadPhoto(`photos/${file}`));
+const upload = document.createElement("label");
+upload.className = "upload";
+upload.textContent = "Use your own photo";
+const input = document.createElement("input");
+input.type = "file"; input.accept = "image/*"; input.hidden = true;
+input.onchange = () => { if (input.files[0]) loadPhoto(URL.createObjectURL(input.files[0])); };
+upload.append(input);
+photoBox.append(upload);
+
+document.getElementById("gallery").innerHTML = GALLERY.map(([file, title, note]) => `
+  <figure><video src="clips/${file}" controls loop muted playsinline preload="metadata"></video>
+  <figcaption><strong>${title}</strong>${note}</figcaption></figure>`).join("");
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

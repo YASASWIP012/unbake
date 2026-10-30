@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unbake</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Unbake</h1>
+    <p>Drop an effect. Get the recipe. Run it on your own photo.</p>
+    <span id="engine" class="pill"></span>
+  </header>
+
+  <main>
+    <section class="column" aria-label="Recipe">
+      <label class="drop" id="clipDrop">
+        <input type="file" id="clipInput" accept="video/*" hidden>
+        <strong>Drop a clip</strong>
+        <span>Measured here, then deleted. Only the recipe stays.</span>
+      </label>
+      <div id="shelf" class="shelf"></div>
+      <div id="recipe" class="recipe" hidden></div>
+    </section>
+
+    <section class="column" aria-label="Render">
+      <label class="drop" id="photoDrop">
+        <input type="file" id="photoInput" accept="image/*" hidden>
+        <img id="photoView" alt="" hidden>
+        <strong id="photoLabel">Drop your photo</strong>
+      </label>
+      <button id="exampleButton" type="button">Use example photo</button>
+      <input id="subject" type="text" placeholder="Describe your subject (optional)">
+      <div class="actions">
+        <button id="previewButton" disabled>Preview camera</button>
+        <button id="bakeButton" class="primary" disabled>Bake</button>
+      </div>
+      <video id="result" controls loop playsinline hidden></video>
+      <ol id="log" class="log"></ol>
+      <div id="report" class="report" hidden></div>
+      <div class="actions">
+        <a id="exportLink" class="button" hidden>Export recipe and workflow</a>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
